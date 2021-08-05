@@ -1,0 +1,19 @@
+#!/bin/sh
+
+case "$ACTION" in
+pressed)
+	return 5
+;;
+timeout)
+	echo "REBOOT" > /dev/console
+	sync
+	reboot
+;;
+released)
+	if [ "$SEEN" -lt 5 ]; then
+		ifup wan
+	fi
+;;
+esac
+
+return 0

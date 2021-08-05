@@ -1,0 +1,103 @@
+#!/bin/sh
+
+if [ "$1" = "led" ]; then
+	if [ $active -eq 0 ]; then
+		led_off $led_r
+		led_off $led_b
+
+		led_timer $led_g 500 500
+
+		for i in $(seq 1 150); do
+			status=$(hostapd_cli wps_get_status)
+			if [ $? -eq 0 ]; then
+				echo $status | grep -Fq "PBC Status: Active" || break
+			fi
+			sleep 1
+		done
+	fi
+
+	config_load system
+
+	led_off $led_r
+	led_off $led_g
+
+	if [ "$(config_get led_wifi trigger)" = "netdev" ]; then
+		if [ "$(get_led_trigger $led_b)" != "netdev" ]; then
+			led_set_attr $led_b "trigger" "netdev"
+			led_set_attr $led_b "device_name" "$(config_get led_wifi dev)"
+			for m in $(config_get led_wifi mode); do
+				led_set_attr $led_b "$m" "1"
+			done
+		fi
+	else
+		led_on $led_b
+	fi
+
+	return 0
+fi
+
+. /lib/functions.sh
+
+wifi_rfkill() {
+	[ -z "$disabled" ] && config_get disabled $1 disabled # use the state of the first device
+	# or
+	#local disabled; config_get disabled $1 disabled # use the state of the current device
+
+	[ "$disabled" = "1" ]; uci set wireless.$1.disabled=$?
+}
+
+led_get_attr() {
+	cat /sys/class/leds/$1/$2 2>/dev/null
+}
+led_get_trigger() {
+	led_get_attr $1 "trigger" | sed 's/.*\[\([^]]*\).*/\1/g'
+}
+
+led_r=bthomehubv5a:red:wireless
+led_g=bthomehubv5a:green:wireless
+led_b=bthomehubv5a:blue:wireless
+
+case "$ACTION" in
+pressed)
+	return 5
+;;
+timeout)
+	config_load wireless
+
+	config_foreach wifi_rfkill wifi-device # switch every device
+	# or
+	#wifi_rfkill "interface_name_here" # switch only the specified device
+
+	uci commit wireless
+	wifi up
+;;
+released)
+	if [ "$SEEN" -lt 5 ]; then
+		. /lib/functions/leds.sh
+
+		[ "$(led_get_trigger $led_g)" = "timer" ] && active=1 cmd=cancel || active=0 cmd=start
+
+		done=0
+		ubusobjs="$(ubus -S list hostapd.*)"
+		for ubusobj in $ubusobjs; do
+			ubus -S call $ubusobj wps_$cmd && done=1
+		done
+		if [ $done -eq 0 ]; then
+			ubusobjs="$(ubus -S list wpa_supplicant.*)"
+			for ubusobj in $ubusobjs; do
+				ifname="$(echo $ubusobj | cut -d'.' -f2)"
+				if [ -e "/var/run/wpa_supplicant-$ifname.conf.is_multiap" ]; then
+					ubus -S call $ubusobj wps_$cmd '{ "multi_ap": true }' && done=1
+				else
+					ubus -S call $ubusobj wps_$cmd && done=1
+				fi
+			done
+			[ $done -eq 0 ] || . $0 led &
+		else
+			. $0 led &
+		fi
+	fi
+;;
+esac
+
+return 0
