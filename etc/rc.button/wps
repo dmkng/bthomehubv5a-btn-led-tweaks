@@ -66,7 +66,9 @@ timeout)
 
 	config_foreach wifi_rfkill wifi-device # switch every device
 	# or
-	#wifi_rfkill "interface_name_here" # switch only the specified device
+	#wifi_rfkill "radio0" # switch only the radio0 device (which is a 5 GHz network, at least on my router)
+	# or
+	#wifi_rfkill "radio1" # switch only the radio1 device (which is a 2.4 GHz network, at least on my router)
 
 	uci commit wireless
 	wifi up
