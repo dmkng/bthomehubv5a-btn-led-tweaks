@@ -1,11 +1,5 @@
 #!/bin/sh /etc/rc.common
 
-. /lib/functions/leds.sh
-
-led_r=bthomehubv5a:red:power
-led_g=bthomehubv5a:green:power
-led_b=bthomehubv5a:blue:power
-
 if [ "$1" = "led" ]; then
 	while [ -f /tmp/templed.lock ]; do
 		if [ "$(cat /sys/class/hwmon/hwmon0/temp1_input 2>/dev/null)" -gt "75500" ]; then
@@ -23,6 +17,12 @@ fi
 
 START=97
 
+. /lib/functions/leds.sh
+
+led_r=bthomehubv5a:red:power
+led_g=bthomehubv5a:green:power
+led_b=bthomehubv5a:blue:power
+
 start() {
 	touch /tmp/templed.lock
 	. $initscript led &
@@ -33,4 +33,5 @@ stop() {
 	led_off $led_r
 	led_off $led_g
 	led_on $led_b
+	sleep 10
 }
